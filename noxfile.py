@@ -80,3 +80,10 @@ def test(session) -> None:
 def docs(session):
     """Build Sphinx documentation"""
     session.run("sphinx-build", "docs", "docs/_build/html", "-j", "auto")
+
+
+@session(python=False)
+def postgres(session) -> None:
+    """Run only tests marked with the 'postgres' marker."""
+    # run serially to avoid concurrent access to the same DB resources
+    session.run("pytest", "-q", "-m", "postgres", "tests")

@@ -22,6 +22,21 @@ env:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    # Provide a postgres service for tests that require it on the ubuntu smoke runner
+    services:
+      pyrate_postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    # make a DATABASE_URL available to steps so tests/examples can pick it up
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -42,6 +57,60 @@ jobs:
           uv run nox -e lint
       - run: uv sync --all-groups
       - run: uv run nox -e smoke
+
+  postgres-tests:
+    name: Postgres integration tests
+    needs: smoke
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python ${{ env.LATEST_PY_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.LATEST_PY_VERSION }}
+          allow-prereleases: true
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.LATEST_PY_VERSION }}
+      - name: Install dependencies
+        run: uv sync --all-groups
+      - name: Wait for Postgres to be ready
+        run: |
+          set -euo pipefail
+          echo "Waiting for Postgres on localhost:5432..."
+          for i in $(seq 1 60); do
+            if command -v pg_isready >/dev/null 2>&1; then
+              pg_isready -h localhost -p 5432 -U postgres && { echo 'Postgres is ready'; exit 0; } || true
+            else
+              if (echo > /dev/tcp/localhost/5432) >/dev/null 2>&1; then
+                echo 'Postgres TCP port is open'; exit 0
+              fi
+            fi
+            sleep 1
+          done
+          echo 'Timeout waiting for Postgres' >&2
+          exit 1
+      - name: Run Postgres integration tests
+        run: |
+          echo "Running DB integration tests via nox (uv run nox -e postgres)..."
+          uv run nox -e postgres || { echo 'Postgres integration tests failed'; exit 1; }
 
   check-others:
     needs: smoke
