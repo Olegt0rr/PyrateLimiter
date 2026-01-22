@@ -109,8 +109,8 @@ jobs:
           exit 1
       - name: Run Postgres integration tests
         run: |
-          echo "Running DB integration tests (pytest -m postgres)..."
-          pytest -q -m postgres || { echo 'Postgres integration tests failed'; exit 1; }
+          echo "Running DB integration tests via nox (uv run nox -e postgres)..."
+          uv run nox -e postgres || { echo 'Postgres integration tests failed'; exit 1; }
 
   check-others:
     needs: smoke
