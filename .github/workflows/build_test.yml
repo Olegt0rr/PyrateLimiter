@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - master
+      - new-implementations
     tags:
       - "v*"
   pull_request:
     branches:
       - master
+      - new-implementations
 
 concurrency:
   # cancels superseded runs
