@@ -47,12 +47,8 @@ def pg_pool():
         pytest.skip("psycopg_pool is not installed in the test environment")
         raise
 
-    pool = ConnectionPool(db_url)
-    try:
+    with ConnectionPool(db_url) as pool:
         yield pool
-    finally:
-        with contextlib.suppress(Error):
-            pool.close()
 
 
 @pytest.mark.postgres
